@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SRT — Process Scheduling</title>
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&family=Space+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0d1117;--surface:#161b22;--surface2:#21262d;
+    --border:#30363d;--text:#e6edf3;--muted:#8b949e;
+    --green:#3fb950;--orange:#f0883e;--purple:#bc8cff;
+    --red:#ff7b72;--blue:#58a6ff;
+    --accent:#3fb950;--accent-dim:rgba(63,185,80,0.08);--accent-border:rgba(63,185,80,0.3);
+    --a:#f0883e;--b:#bc8cff;--c:#3fb950;--d:#ff7b72;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{background:var(--bg);color:var(--text);font-family:'Sarabun',sans-serif;min-height:100vh;}
+  nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(13,17,23,0.9);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 2rem;height:60px;}
+  .nav-logo{font-family:'Space Mono',monospace;font-size:0.85rem;color:var(--accent);}
+  .nav-links{display:flex;gap:0.5rem;}
+  .nav-btn{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:6px 14px;font-family:'Space Mono',monospace;font-size:0.75rem;color:var(--muted);cursor:pointer;text-decoration:none;transition:all 0.2s;}
+  .nav-btn:hover{border-color:var(--accent);color:var(--accent);}
+  .nav-btn.active{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
+
+  .page-hero{padding:120px 2rem 60px;background:radial-gradient(ellipse 70% 60% at 50% 0%,rgba(63,185,80,0.08) 0%,transparent 70%);border-bottom:1px solid var(--border);text-align:center;position:relative;overflow:hidden;}
+  .page-hero::before{content:'SRT';position:absolute;font-family:'Playfair Display',serif;font-size:clamp(8rem,20vw,16rem);font-weight:700;color:rgba(63,185,80,0.04);top:50%;left:50%;transform:translate(-50%,-50%);pointer-events:none;}
+  .type-badge{display:inline-flex;align-items:center;gap:6px;background:var(--accent-dim);border:1px solid var(--accent-border);border-radius:100px;padding:5px 14px;margin-bottom:1.25rem;font-family:'Space Mono',monospace;font-size:0.72rem;color:var(--accent);animation:fadeUp 0.5s ease both;}
+  .page-title{font-family:'Playfair Display',serif;font-size:clamp(2rem,5vw,3.5rem);margin-bottom:0.5rem;animation:fadeUp 0.5s ease 0.1s both;}
+  .page-full{font-family:'Space Mono',monospace;font-size:0.9rem;color:var(--muted);margin-bottom:1rem;animation:fadeUp 0.5s ease 0.15s both;}
+  .page-desc{color:var(--muted);font-size:1rem;line-height:1.7;max-width:600px;margin:0 auto;animation:fadeUp 0.5s ease 0.2s both;}
+  @keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+
+  .stats-row{display:flex;justify-content:center;gap:1rem;flex-wrap:wrap;padding:2rem;border-bottom:1px solid var(--border);}
+  .stat-pill{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:1rem 2rem;text-align:center;min-width:160px;}
+  .stat-pill-label{font-family:'Space Mono',monospace;font-size:0.65rem;color:var(--muted);margin-bottom:0.4rem;}
+  .stat-pill-value{font-family:'Space Mono',monospace;font-size:2rem;font-weight:700;color:var(--green);}
+  .stat-pill-value.neu{color:var(--accent);}
+
+  main{max-width:900px;margin:0 auto;padding:3rem 1.5rem 6rem;}
+  section{margin-bottom:3.5rem;}
+  .sec-label{font-family:'Space Mono',monospace;font-size:0.68rem;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);margin-bottom:0.4rem;}
+  .sec-title{font-family:'Playfair Display',serif;font-size:1.6rem;margin-bottom:1.5rem;}
+
+  .gantt-wrap{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:1.75rem;}
+  .gantt-bar{display:flex;height:52px;border-radius:10px;overflow:hidden;border:1px solid var(--border);margin-bottom:0.75rem;}
+  .gseg{display:flex;align-items:center;justify-content:center;font-family:'Space Mono',monospace;font-size:0.85rem;font-weight:700;transition:opacity 0.2s;position:relative;}
+  .gseg:hover{opacity:0.75;}
+  .gseg:not(:last-child){border-right:2px solid rgba(13,17,23,0.5);}
+  .gseg.a{background:rgba(240,136,62,0.22);color:var(--a);}
+  .gseg.b{background:rgba(188,140,255,0.22);color:var(--b);}
+  .gseg.c{background:rgba(63,185,80,0.22);color:var(--c);}
+  .gseg.d{background:rgba(255,123,114,0.22);color:var(--d);}
+  .gantt-timeline{display:flex;justify-content:space-between;font-family:'Space Mono',monospace;font-size:0.72rem;color:var(--muted);padding:0 2px;margin-bottom:1rem;}
+  .gantt-note{font-family:'Space Mono',monospace;font-size:0.72rem;color:var(--muted);margin-top:0.5rem;}
+  .gantt-note span{color:var(--accent);}
+
+  /* Remaining time tracker */
+  .rt-table-wrap{background:var(--surface2);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-top:1.25rem;}
+  .rt-table{width:100%;border-collapse:collapse;font-family:'Space Mono',monospace;font-size:0.78rem;}
+  .rt-table th{padding:0.5rem 1rem;background:rgba(63,185,80,0.06);color:var(--muted);font-size:0.65rem;letter-spacing:0.08em;text-align:center;border-bottom:1px solid var(--border);}
+  .rt-table td{padding:0.6rem 1rem;text-align:center;border-top:1px solid rgba(48,54,61,0.4);}
+  .rt-table td:first-child{text-align:left;}
+  .highlight-cell{color:var(--accent);font-weight:700;}
+  .done-cell{color:var(--muted);text-decoration:line-through;}
+
+  .tbl-wrap{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden;}
+  table.main-tbl{width:100%;border-collapse:collapse;font-family:'Space Mono',monospace;font-size:0.82rem;}
+  table.main-tbl th{text-align:left;padding:0.75rem 1.25rem;background:var(--surface2);color:var(--muted);font-size:0.68rem;letter-spacing:0.08em;text-transform:uppercase;}
+  table.main-tbl td{padding:0.8rem 1.25rem;border-top:1px solid rgba(48,54,61,0.5);}
+  table.main-tbl tr:hover td{background:rgba(255,255,255,0.02);}
+  .pb{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;font-weight:700;font-size:0.78rem;margin-right:6px;}
+  .pb.a{background:rgba(240,136,62,0.15);color:var(--a);}
+  .pb.b{background:rgba(188,140,255,0.15);color:var(--b);}
+  .pb.c{background:rgba(63,185,80,0.15);color:var(--c);}
+  .pb.d{background:rgba(255,123,114,0.15);color:var(--d);}
+
+  .winner-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(63,185,80,0.1);border:1px solid rgba(63,185,80,0.4);border-radius:100px;padding:4px 14px;font-family:'Space Mono',monospace;font-size:0.72rem;color:var(--green);margin-bottom:1rem;}
+
+  .insight{background:var(--accent-dim);border:1px solid var(--accent-border);border-radius:12px;padding:1.25rem 1.5rem;margin-top:1.5rem;}
+  .insight-title{font-family:'Space Mono',monospace;font-size:0.72rem;color:var(--accent);margin-bottom:0.5rem;letter-spacing:0.08em;}
+  .insight p{color:var(--muted);font-size:0.9rem;line-height:1.7;}
+
+  .nav-bottom{display:flex;justify-content:space-between;gap:1rem;padding-top:3rem;border-top:1px solid var(--border);flex-wrap:wrap;}
+  .nav-page-btn{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0.875rem 1.5rem;text-decoration:none;color:var(--text);font-family:'Space Mono',monospace;font-size:0.78rem;transition:all 0.2s;}
+  .nav-page-btn:hover{transform:translateY(-2px);}
+  .nav-page-btn.prev{color:var(--b);}
+  .nav-page-btn.prev:hover{border-color:var(--b);}
+  .nav-page-btn.next{color:var(--d);}
+  .nav-page-btn.next:hover{border-color:var(--d);}
+
+  footer{text-align:center;padding:2rem;color:var(--muted);font-size:0.8rem;border-top:1px solid var(--border);}
+</style>
+</head>
+<body>
+<nav>
+  <div class="nav-logo">⚙ Process Scheduling</div>
+  <div class="nav-links">
+    <a class="nav-btn" href="index.html">หน้าหลัก</a>
+    <a class="nav-btn" href="fcfs.html">FCFS</a>
+    <a class="nav-btn" href="rr.html">RR</a>
+    <a class="nav-btn active" href="srt.html">SRT</a>
+    <a class="nav-btn" href="hrrn.html">HRRN</a>
+  </div>
+</nav>
+
+<div class="page-hero">
+  <div class="type-badge">PREEMPTIVE · ประสิทธิภาพดีที่สุด 🏆</div>
+  <div class="page-title">Shortest Remaining Time</div>
+  <div class="page-full">SRT — อัลกอริทึมเวลาเหลือน้อยที่สุด</div>
+  <p class="page-desc">เลือกโปรเซสที่มีเวลาประมวลผลเหลืออยู่น้อยที่สุดทำงานก่อนเสมอ สามารถแทรกกลางคันได้ทันทีเมื่อมีโปรเซสใหม่ที่มีเวลาเหลือน้อยกว่า</p>
+</div>
+
+<div class="stats-row">
+  <div class="stat-pill"><div class="stat-pill-label">Average Turnaround Time</div><div class="stat-pill-value">7.50</div></div>
+  <div class="stat-pill"><div class="stat-pill-label">Average Normalized Tr</div><div class="stat-pill-value">1.56</div></div>
+  <div class="stat-pill"><div class="stat-pill-label">Preemptive?</div><div class="stat-pill-value neu">✓ ใช่</div></div>
+</div>
+
+<main>
+  <!-- GANTT -->
+  <section>
+    <div class="sec-label">// การทำงาน</div>
+    <div class="sec-title">Gantt Chart</div>
+    <div class="gantt-wrap">
+      <div class="gantt-bar">
+        <div class="gseg a" style="width:11.11%">A</div>
+        <div class="gseg a" style="width:5.56%">A</div>
+        <div class="gseg b" style="width:5.56%">B</div>
+        <div class="gseg c" style="width:11.11%">C</div>
+        <div class="gseg c" style="width:11.11%">C</div>
+        <div class="gseg b" style="width:27.78%">B</div>
+        <div class="gseg d" style="width:27.78%">D</div>
+      </div>
+      <div class="gantt-timeline">
+        <span>0</span><span>2</span><span>3</span><span>4</span><span>6</span><span>8</span><span>13</span><span>18</span>
+      </div>
+
+      <div class="gantt-note">
+        A(0→2) → A(2→3) → B(3→4) → C(4→6) → C(6→8) → B(8→13) → D(13→18)
+      </div>
+
+      <!-- Remaining time table -->
+      <div class="rt-table-wrap">
+        <table class="rt-table">
+          <thead>
+            <tr>
+              <th>เวลา</th>
+              <th>โปรเซสในคิว</th>
+              <th>Remaining A</th>
+              <th>Remaining B</th>
+              <th>Remaining C</th>
+              <th>Remaining D</th>
+              <th>เลือก</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>t=0</td><td>A</td><td class="highlight-cell">3</td><td>-</td><td>-</td><td>-</td><td style="color:var(--a)">A</td></tr>
+            <tr><td>t=2</td><td>A,B</td><td class="highlight-cell">1</td><td>6</td><td>-</td><td>-</td><td style="color:var(--a)">A (1&lt;6)</td></tr>
+            <tr><td>t=3</td><td>B</td><td class="done-cell">0 ✓</td><td class="highlight-cell">6</td><td>-</td><td>-</td><td style="color:var(--b)">B</td></tr>
+            <tr><td>t=4</td><td>B,C</td><td class="done-cell">✓</td><td>5</td><td class="highlight-cell">4</td><td>-</td><td style="color:var(--c)">C (4&lt;5)</td></tr>
+            <tr><td>t=6</td><td>B,C,D</td><td class="done-cell">✓</td><td>5</td><td class="highlight-cell">2</td><td>5</td><td style="color:var(--c)">C (2&lt;5)</td></tr>
+            <tr><td>t=8</td><td>B,D</td><td class="done-cell">✓</td><td class="highlight-cell">5</td><td class="done-cell">0 ✓</td><td>5</td><td style="color:var(--b)">B (tie→B)</td></tr>
+            <tr><td>t=13</td><td>D</td><td class="done-cell">✓</td><td class="done-cell">0 ✓</td><td class="done-cell">✓</td><td class="highlight-cell">5</td><td style="color:var(--d)">D</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- TABLE -->
+  <section>
+    <div class="sec-label">// ผลลัพธ์</div>
+    <div class="sec-title">ตารางผลการคำนวณ</div>
+    <div class="winner-badge">🏆 ประสิทธิภาพดีที่สุดในชุดตัวอย่างนี้</div>
+    <div class="tbl-wrap">
+      <table class="main-tbl">
+        <thead>
+          <tr><th>Process</th><th>Arrival</th><th>Service</th><th>Finish</th><th>Turnaround (Tr)</th><th>Tr/Ts</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><span class="pb a">A</span>A</td><td>0</td><td>3</td><td>3</td><td>3</td><td>1.00</td></tr>
+          <tr><td><span class="pb b">B</span>B</td><td>2</td><td>6</td><td>13</td><td>11</td><td>1.83</td></tr>
+          <tr><td><span class="pb c">C</span>C</td><td>4</td><td>4</td><td>8</td><td>4</td><td>1.00</td></tr>
+          <tr><td><span class="pb d">D</span>D</td><td>6</td><td>5</td><td>18</td><td>12</td><td>2.40</td></tr>
+          <tr style="background:var(--surface2);">
+            <td colspan="4" style="color:var(--muted);font-size:0.72rem;letter-spacing:0.05em;">AVERAGE</td>
+            <td style="color:var(--green);font-weight:700;">7.50</td>
+            <td style="color:var(--green);font-weight:700;">1.56</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="insight">
+      <div class="insight-title">// ข้อสังเกต</div>
+      <p>SRT ให้ผลดีที่สุดเพราะสามารถ <strong style="color:var(--text)">แทรกกลางคัน</strong> ได้ทันที — เมื่อ C มาถึงที่ t=4 มี Remaining Time = 4 น้อยกว่า B ที่เหลือ 5 จึงสลับไปทำ C ก่อน อย่างไรก็ตาม SRT อาจทำให้เกิด <strong style="color:var(--text)">Starvation</strong> กับโปรเซสที่ใช้เวลานานหากมีโปรเซสสั้นเข้ามาต่อเนื่อง</p>
+    </div>
+  </section>
+
+  <div class="nav-bottom">
+    <a class="nav-page-btn prev" href="rr.html">← Round Robin</a>
+    <a class="nav-page-btn next" href="hrrn.html">HRRN →</a>
+  </div>
+</main>
+<footer>ผู้สอน: ปกกป้อง พินพันธ์ · ณัฐดนัย โพธิ์ทอง</footer>
+</body>
+</html>
